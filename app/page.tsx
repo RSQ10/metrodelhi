@@ -1,113 +1,134 @@
 'use client'
-import { useState, useEffect, Suspense } from 'react'
-import { useSearchParams } from 'next/navigation'
-import StationPicker from '@/components/StationPicker'
-import RouteResult from '@/components/RouteResult'
-import { useRouteStore } from '@/lib/store'
+import { useEffect, useState } from 'react'
+import Link from 'next/link'
+import { useParams, useRouter } from 'next/navigation'
 import { FUNCTIONS_URL } from '@/lib/supabase'
+import { EXIT_GATES } from '@/constants/gates'
 
-function HomeContent() {
-  const { fromStation, toStation, setFrom, setTo, swapStations } = useRouteStore()
-  const [loading, setLoading] = useState(false)
-  const [route, setRoute]     = useState<any>(null)
-  const [error, setError]     = useState<string | null>(null)
-  const searchParams = useSearchParams()
+export default function StationDetail() {
+  const params  = useParams()
+  const router  = useRouter()
+  const decoded = decodeURIComponent(params.name as string ?? '')
+  const [info, setInfo]       = useState<any>(null)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const f = searchParams.get('from'), t = searchParams.get('to')
-    if (f) setFrom(decodeURIComponent(f))
-    if (t) setTo(decodeURIComponent(t))
-  }, [searchParams])
-  const findRoute = async () => {
-    if (!fromStation || !toStation) return
-    if (fromStation === toStation) { setError('Please select two different stations.'); return }
-    setLoading(true); setRoute(null); setError(null)
-    try {
-      const res  = await fetch(`${FUNCTIONS_URL}/route`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ from: fromStation, to: toStation }),
+    fetch(`${FUNCTIONS_URL}/stations?q=${encodeURIComponent(decoded)}`)
+      .then(r => r.json())
+      .then(d => {
+        const match = (d.stations ?? []).find((s: any) => s.name.toLowerCase() === decoded.toLowerCase())
+        setInfo(match ?? null)
       })
-      const data = await res.json()
-      if (data.error) setError(data.error)
-      else setRoute(data)
-    } catch { setError('Could not connect. Check your internet.') }
-    finally { setLoading(false) }
-  }
+      .catch(console.error)
+      .finally(() => setLoading(false))
+  }, [decoded])
 
-  return (
-    <div className="max-w-xl mx-auto">
-      {/* Hero */}
-      <div className="text-center mb-8">
-        <h1 className="text-3xl font-bold text-[#e2e8f8] tracking-tight">Route Finder</h1>
-        <p className="text-[#4a5270] mt-2 text-sm">Find the fastest route between any two Delhi Metro stations</p>
-      </div>
+  const gates = EXIT_GATES[decoded] ?? null
 
-      {/* Picker card */}
-      <div className="bg-[#141928] rounded-2xl border border-[#1e2538] p-5 shadow-xl shadow-black/20">
-        <label className="block text-[10px] font-bold text-[#4a5270] uppercase tracking-widest mb-2">From</label>
-        <StationPicker
-          placeholder="Select departure station"
-          value={fromStation}
-          onSelect={(s) => { setFrom(s); setRoute(null); setError(null) }}
-        />
+  const UNDERGROUND = ['kashmere gate','rajiv chowk','new delhi','central secretariat','mandi house',
+    'hauz khas','kalkaji mandir','iit','khan market','jor bagh','patel chowk','chandni chowk',
+    'chawri bazar','vishwa vidyalaya','vidhan sabha','civil lines','janpath','lal qila',
+    'jama masjid','delhi gate','ito','aiims','green park','malviya nagar']
 
-        {/* Swap */}
-        <div className="flex items-center gap-3 my-4">
-          <div className="flex-1 h-px bg-[#1e2538]" />
-          <button
-            onClick={() => { swapStations(); setRoute(null) }}
-            className="w-9 h-9 rounded-xl bg-[#1e2538] hover:bg-[#2a3350] border border-[#2a3350]
-              hover:border-[#3a4568] flex items-center justify-center transition-all duration-200
-              text-[#4a5270] hover:text-[#e2e8f8] active:scale-95"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4" />
-            </svg>
-          </button>
-          <div className="flex-1 h-px bg-[#1e2538]" />
-        </div>
+  const isUnderground = UNDERGROUND.includes(decoded.toLowerCase())
 
-        <label className="block text-[10px] font-bold text-[#4a5270] uppercase tracking-widest mb-2">To</label>
-        <StationPicker
-          placeholder="Select destination station"
-          value={toStation}
-          onSelect={(s) => { setTo(s); setRoute(null); setError(null) }}
-        />
-
-        <button
-          onClick={findRoute}
-          disabled={!fromStation || !toStation || loading}
-          className="w-full mt-5 py-3.5 rounded-xl font-semibold text-white text-sm
-            bg-[#4f8ef7] hover:bg-[#3a7ef0] disabled:bg-[#1e2538] disabled:text-[#4a5270]
-            transition-all duration-200 active:scale-[0.98] flex items-center justify-center gap-2"
-        >
-          {loading ? (
-            <>
-              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              Finding route...
-            </>
-          ) : 'Find Route →'}
-        </button>
-      </div>
-
-      {/* Error */}
-      {error && (
-        <div className="mt-3 px-4 py-3 rounded-xl bg-red-950/50 border border-red-900/50 text-red-400 text-sm">
-          ⚠️ {error}
-        </div>
-      )}
-
-      {/* Result */}
-      {route && <RouteResult route={route} />}
+  if (loading) return (
+    <div className="flex justify-center items-center min-h-[50vh]">
+      <div className="w-6 h-6 border-2 border-[#4f8ef7] border-t-transparent rounded-full animate-spin" />
     </div>
   )
-}
 
-export default function HomePage() {
   return (
-    <Suspense>
-      <HomeContent />
-    </Suspense>
+    <div className="max-w-2xl mx-auto">
+      {/* Back */}
+      <Link href="/stations" className="inline-flex items-center gap-1.5 text-[#4f8ef7] text-sm mb-6 hover:text-[#7ab0ff] transition-colors">
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+        </svg>
+        All Stations
+      </Link>
+
+      {/* Header */}
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-[#e2e8f8] leading-tight">{decoded}</h1>
+        <div className="flex gap-2 mt-2 flex-wrap">
+          {info?.is_interchange && (
+            <span className="px-2.5 py-1 rounded-full text-xs font-bold border border-amber-500/30 bg-amber-500/10 text-amber-400">
+              ⇄ Interchange
+            </span>
+          )}
+          <span className="px-2.5 py-1 rounded-full text-xs font-bold border border-[#1e2538] bg-[#141928] text-[#4a5270]">
+            {isUnderground ? '🕳 Underground' : '🏗 Elevated'}
+          </span>
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        {/* Lines */}
+        <div className="bg-[#141928] rounded-2xl border border-[#1e2538] p-5">
+          <h2 className="text-xs font-bold text-[#4a5270] uppercase tracking-widest mb-4">Lines</h2>
+          <div className="space-y-2.5">
+            {(info?.line_colors ?? []).map((color: string, i: number) => (
+              <div key={i} className="flex items-center gap-3">
+                <div className="w-3 h-3 rounded-sm shrink-0" style={{ backgroundColor: color }} />
+                <span className="text-[#e2e8f8] text-sm capitalize">
+                  {(info?.lines?.[i] ?? '').replace('branch', ' Branch')} Line
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Exit gates */}
+        <div className="bg-[#141928] rounded-2xl border border-[#1e2538] p-5">
+          <h2 className="text-xs font-bold text-[#4a5270] uppercase tracking-widest mb-4">Exit Gates</h2>
+          {gates ? (
+            <div className="space-y-0 divide-y divide-[#1e2538]">
+              {gates.gates.map((gate, i) => (
+                <div key={i} className="flex gap-3 py-3.5 first:pt-0 last:pb-0 items-start">
+                  <div className="w-9 h-9 rounded-lg bg-[#4f8ef7]/10 border border-[#4f8ef7]/20
+                    flex items-center justify-center shrink-0">
+                    <span className="text-[#4f8ef7] font-bold text-sm">{gate.gate.replace('Gate ', '')}</span>
+                  </div>
+                  <div>
+                    <p className="text-sm text-[#c9cdd8] leading-snug">{gate.landmarks}</p>
+                    {gate.has_lift && <p className="text-xs text-emerald-400 mt-1">♿ Lift available</p>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-6">
+              <p className="text-3xl mb-2">🚪</p>
+              <p className="text-[#e2e8f8] font-medium text-sm">No gate data yet</p>
+              <p className="text-[#4a5270] text-xs mt-1">Gate info hasn't been added for this station.</p>
+            </div>
+          )}
+        </div>
+
+        {/* Quick actions */}
+        <div className="bg-[#141928] rounded-2xl border border-[#1e2538] p-5">
+          <h2 className="text-xs font-bold text-[#4a5270] uppercase tracking-widest mb-4">Quick Actions</h2>
+          <div className="grid grid-cols-2 gap-2">
+            <Link
+              href={`/?from=${encodeURIComponent(decoded)}`}
+              className="flex items-center justify-center gap-2 py-3 rounded-xl
+                bg-[#1e2538] hover:bg-[#2a3350] border border-[#2a3350] hover:border-[#3a4568]
+                text-[#e2e8f8] text-sm font-medium transition-all"
+            >
+              🟢 Set as From
+            </Link>
+            <Link
+              href={`/?to=${encodeURIComponent(decoded)}`}
+              className="flex items-center justify-center gap-2 py-3 rounded-xl
+                bg-[#1e2538] hover:bg-[#2a3350] border border-[#2a3350] hover:border-[#3a4568]
+                text-[#e2e8f8] text-sm font-medium transition-all"
+            >
+              🔴 Set as To
+            </Link>
+          </div>
+        </div>
+      </div>
+    </div>
   )
 }
