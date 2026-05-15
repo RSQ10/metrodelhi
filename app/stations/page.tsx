@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { FUNCTIONS_URL } from '@/lib/supabase'
+import { LINE_COLORS } from '@/constants/lines'
 
 interface Station {
   name: string
@@ -11,17 +12,17 @@ interface Station {
 }
 
 export default function StationsPage() {
-  const [query, setQuery]       = useState('')
+  const [query, setQuery] = useState('')
   const [stations, setStations] = useState<Station[]>([])
-  const [loading, setLoading]   = useState(false)
+  const [loading, setLoading] = useState(false)
 
   const fetchStations = async (q: string) => {
     setLoading(true)
     try {
-      const res  = await fetch(`${FUNCTIONS_URL}/stations?q=${encodeURIComponent(q)}`)
+      const res = await fetch(`${FUNCTIONS_URL}/stations?q=${encodeURIComponent(q)}`)
       const data = await res.json()
       setStations(data.stations ?? [])
-    } catch {}
+    } catch { }
     finally { setLoading(false) }
   }
 
@@ -71,15 +72,18 @@ export default function StationsPage() {
                   {s.is_interchange ? '⇄ ' : ''}{s.name}
                 </span>
                 <div className="flex gap-1 mt-1.5 flex-wrap">
-                  {(s.line_colors ?? []).map((color, i) => (
-                    <span
-                      key={i}
-                      className="px-1.5 py-0.5 rounded text-[9px] font-bold text-white"
-                      style={{ backgroundColor: color }}
-                    >
-                      {(s.lines?.[i] ?? '').replace('branch', '').toUpperCase()}
-                    </span>
-                  ))}
+                  {(s.lines ?? []).map((line, i) => {
+                    const color = LINE_COLORS[line.toLowerCase()] || s.line_colors?.[i] || '#6b7280'
+                    return (
+                      <span
+                        key={i}
+                        className="px-1.5 py-0.5 rounded text-[9px] font-bold text-white"
+                        style={{ backgroundColor: color }}
+                      >
+                        {line.replace('branch', '').toUpperCase()}
+                      </span>
+                    )
+                  })}
                 </div>
               </div>
               <svg className="w-4 h-4 text-[#4a5270] group-hover:text-[#e2e8f8] transition-colors shrink-0 ml-3"
