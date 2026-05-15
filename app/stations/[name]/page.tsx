@@ -4,12 +4,13 @@ import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { FUNCTIONS_URL } from '@/lib/supabase'
 import { EXIT_GATES } from '@/constants/gates'
+import { LINE_COLORS } from '@/constants/lines'
 
 export default function StationDetail() {
-  const params  = useParams()
-  const router  = useRouter()
+  const params = useParams()
+  const router = useRouter()
   const decoded = decodeURIComponent(params.name as string ?? '')
-  const [info, setInfo]       = useState<any>(null)
+  const [info, setInfo] = useState<any>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -25,10 +26,10 @@ export default function StationDetail() {
 
   const gates = EXIT_GATES[decoded] ?? null
 
-  const UNDERGROUND = ['kashmere gate','rajiv chowk','new delhi','central secretariat','mandi house',
-    'hauz khas','kalkaji mandir','iit','khan market','jor bagh','patel chowk','chandni chowk',
-    'chawri bazar','vishwa vidyalaya','vidhan sabha','civil lines','janpath','lal qila',
-    'jama masjid','delhi gate','ito','aiims','green park','malviya nagar']
+  const UNDERGROUND = ['kashmere gate', 'rajiv chowk', 'new delhi', 'central secretariat', 'mandi house',
+    'hauz khas', 'kalkaji mandir', 'iit', 'khan market', 'jor bagh', 'patel chowk', 'chandni chowk',
+    'chawri bazar', 'vishwa vidyalaya', 'vidhan sabha', 'civil lines', 'janpath', 'lal qila',
+    'jama masjid', 'delhi gate', 'ito', 'aiims', 'green park', 'malviya nagar']
 
   const isUnderground = UNDERGROUND.includes(decoded.toLowerCase())
 
@@ -68,20 +69,32 @@ export default function StationDetail() {
         <div className="bg-[#141928] rounded-2xl border border-[#1e2538] p-5">
           <h2 className="text-xs font-bold text-[#4a5270] uppercase tracking-widest mb-4">Lines</h2>
           <div className="space-y-2.5">
-            {(info?.line_colors ?? []).map((color: string, i: number) => (
-              <div key={i} className="flex items-center gap-3">
-                <div className="w-3 h-3 rounded-sm shrink-0" style={{ backgroundColor: color }} />
-                <span className="text-[#e2e8f8] text-sm capitalize">
-                  {(info?.lines?.[i] ?? '').replace('branch', ' Branch')} Line
-                </span>
-              </div>
-            ))}
+            {(info?.lines ?? []).map((line: string, i: number) => {
+              const color = LINE_COLORS[line.toLowerCase()] || info?.line_colors?.[i] || '#6b7280'
+              return (
+                <div key={i} className="flex items-center gap-3">
+                  <div className="w-3 h-3 rounded-sm shrink-0" style={{ backgroundColor: color }} />
+                  <span className="text-[#e2e8f8] text-sm capitalize">
+                    {line.replace('branch', ' Branch')} Line
+                  </span>
+                </div>
+              )
+            })}
           </div>
         </div>
 
         {/* Exit gates */}
         <div className="bg-[#141928] rounded-2xl border border-[#1e2538] p-5">
-          <h2 className="text-xs font-bold text-[#4a5270] uppercase tracking-widest mb-4">Exit Gates</h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xs font-bold text-[#4a5270] uppercase tracking-widest">Exit Gates</h2>
+            <Link
+              href={`https://github.com/yourusername/metrodelhi/edit/main/constants/gates.ts`}
+              target="_blank"
+              className="text-[10px] font-bold text-[#4f8ef7] hover:text-[#7ab0ff] uppercase tracking-wider transition-colors"
+            >
+              + Add Data
+            </Link>
+          </div>
           {gates ? (
             <div className="space-y-0 divide-y divide-[#1e2538]">
               {gates.gates.map((gate, i) => (
