@@ -38,19 +38,35 @@ export default function RouteResult({ route }: { route: RouteData }) {
     stops: string[]
     endStep: RouteStep
     color: string
+    line: string
+    direction?: string
   }[] = []
 
   for (let i = 0; i < steps.length; i++) {
     const step = steps[i]
     if (step.action !== 'board' && step.action !== 'interchange') continue
+    
     const nextIdx = steps.findIndex((s, j) => j > i && (s.action === 'interchange' || s.action === 'alight'))
     if (nextIdx === -1) break
+    
     const nextStep = steps[nextIdx]
     const fromIdx = path.findIndex(p => p === step.station)
     const toIdx = path.findIndex(p => p === nextStep.station)
     const stops = fromIdx !== -1 && toIdx !== -1 ? path.slice(fromIdx + 1, toIdx) : []
-    const color = LINE_COLORS[step.line.toLowerCase()] || route.lines_used?.find(l => l.id === step.line)?.color || '#6b7280'
-    segments.push({ boardStep: step, stops, endStep: nextStep, color })
+    
+    // The line and direction for THIS leg are stored in the NEXT step (interchange/alight)
+    const legLine = nextStep.line
+    const legDirection = nextStep.direction
+    const color = LINE_COLORS[legLine.toLowerCase()] || route.lines_used?.find(l => l.id === legLine)?.color || '#6b7280'
+    
+    segments.push({ 
+      boardStep: step, 
+      stops, 
+      endStep: nextStep, 
+      color, 
+      line: legLine, 
+      direction: legDirection 
+    })
   }
 
   return (
@@ -102,10 +118,10 @@ export default function RouteResult({ route }: { route: RouteData }) {
                   className="inline-block mt-1.5 px-2 py-0.5 rounded-md text-[10px] font-bold text-white"
                   style={{ backgroundColor: seg.color }}
                 >
-                  {LINE_NAMES[seg.boardStep.line] ?? seg.boardStep.line}
+                  {LINE_NAMES[seg.line] ?? seg.line}
                 </span>
-                {seg.boardStep.direction && (
-                  <p className="text-xs text-[#4a5270] mt-1">towards {seg.boardStep.direction}</p>
+                {seg.direction && (
+                  <p className="text-xs text-[#4a5270] mt-1">towards {seg.direction}</p>
                 )}
                 {seg.boardStep.action === 'interchange' && (
                   <p className="text-xs text-[#4f8ef7] font-semibold mt-1">⇄ Change platform here</p>
