@@ -42,10 +42,10 @@ export default function RouteResult({ route }: { route: RouteData }) {
     direction?: string
   }[] = []
 
-  // The API structure is:
-  // Step 0: board (station A, line X)
-  // Step 1: interchange (station B, line Y, direction Z) -> This means at station B, you switch TO line Y towards Z.
-  // Step 2: alight (station C, line Y, direction Z) -> This means you arrive at C on line Y.
+  // The backend buildSteps function provides:
+  // - 'board' step: has the initial line and direction.
+  // - 'interchange' step: has the NEW line and NEW direction you are switching to.
+  // - 'alight' step: marks the end of the journey.
 
   for (let i = 0; i < steps.length; i++) {
     const currentStep = steps[i]
@@ -59,24 +59,10 @@ export default function RouteResult({ route }: { route: RouteData }) {
     
     const nextStep = steps[nextIdx]
     
-    // Logic for Line and Direction:
-    // 1. If we just boarded (Step 0), the line is in Step 0. The direction is in the NEXT step.
-    // 2. If we are at an interchange (Step 1), the line and direction for the NEXT leg are BOTH in Step 1.
-    
-    let legLine = currentStep.line
-    let legDirection = nextStep.direction
-
-    // If it's an interchange, the currentStep already contains the NEW line we are switching to.
-    // However, some APIs put the "towards" info in the step that completes the leg.
-    // Let's ensure we use the most specific data available.
-    if (currentStep.action === 'interchange') {
-      legLine = currentStep.line
-      // If currentStep has a direction, use it; otherwise use nextStep's direction
-      legDirection = currentStep.direction || nextStep.direction
-    } else if (currentStep.action === 'board') {
-      legLine = currentStep.line
-      legDirection = nextStep.direction
-    }
+    // Use the line and direction directly from the current step (board/interchange)
+    // as the backend already populates these correctly for the upcoming leg.
+    const legLine = currentStep.line
+    const legDirection = currentStep.direction
 
     const fromIdx = path.findIndex(p => p === currentStep.station)
     const toIdx = path.findIndex(p => p === nextStep.station)
