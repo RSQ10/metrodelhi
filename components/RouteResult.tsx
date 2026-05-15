@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import Link from 'next/link'
 import { LINE_COLORS, LINE_NAMES } from '@/constants/lines'
 import { EXIT_GATES } from '@/constants/gates'
 
@@ -22,14 +23,14 @@ interface RouteData {
 
 export default function RouteResult({ route }: { route: RouteData }) {
   const [expandedSeg, setExpandedSeg] = useState<number | null>(null)
-  const [showGates, setShowGates]     = useState(false)
+  const [showGates, setShowGates] = useState(false)
 
   if (!route?.steps || !Array.isArray(route.steps)) return null
 
-  const path  = route.path ?? []
+  const path = route.path ?? []
   const steps = route.steps
   const destination = steps[steps.length - 1]?.station ?? ''
-  const gateData    = EXIT_GATES[destination]
+  const gateData = EXIT_GATES[destination]
 
   // Build segments
   const segments: {
@@ -45,10 +46,10 @@ export default function RouteResult({ route }: { route: RouteData }) {
     const nextIdx = steps.findIndex((s, j) => j > i && (s.action === 'interchange' || s.action === 'alight'))
     if (nextIdx === -1) break
     const nextStep = steps[nextIdx]
-    const fromIdx  = path.findIndex(p => p === step.station)
-    const toIdx    = path.findIndex(p => p === nextStep.station)
-    const stops    = fromIdx !== -1 && toIdx !== -1 ? path.slice(fromIdx + 1, toIdx) : []
-    const color    = route.lines_used?.find(l => l.id === step.line)?.color ?? LINE_COLORS[step.line] ?? '#6b7280'
+    const fromIdx = path.findIndex(p => p === step.station)
+    const toIdx = path.findIndex(p => p === nextStep.station)
+    const stops = fromIdx !== -1 && toIdx !== -1 ? path.slice(fromIdx + 1, toIdx) : []
+    const color = LINE_COLORS[step.line.toLowerCase()] || route.lines_used?.find(l => l.id === step.line)?.color || '#6b7280'
     segments.push({ boardStep: step, stops, endStep: nextStep, color })
   }
 
@@ -76,7 +77,7 @@ export default function RouteResult({ route }: { route: RouteData }) {
           <span
             key={l.id}
             className="px-3 py-1 rounded-full text-xs font-bold text-white"
-            style={{ backgroundColor: l.color }}
+            style={{ backgroundColor: LINE_COLORS[l.id.toLowerCase()] || l.color }}
           >
             {l.name}
           </span>
@@ -154,16 +155,23 @@ export default function RouteResult({ route }: { route: RouteData }) {
 
       {/* ── Exit Gates ── */}
       <div className="bg-[#141928] rounded-2xl border border-[#1e2538] overflow-hidden">
-        <button
-          onClick={() => setShowGates(!showGates)}
-          className="w-full flex items-center justify-between p-5 hover:bg-[#1a2030] transition-colors"
-        >
+        <div className="flex items-center justify-between p-5 hover:bg-[#1a2030] transition-colors cursor-pointer" onClick={() => setShowGates(!showGates)}>
           <div>
             <h3 className="text-sm font-semibold text-[#4a5270] uppercase tracking-widest text-left">Exit Gates</h3>
             <p className="text-[#e2e8f8] font-medium mt-0.5 text-left">{destination}</p>
           </div>
-          <span className="text-[#4a5270] text-sm">{showGates ? '▲' : '▼'}</span>
-        </button>
+          <div className="flex items-center gap-4">
+            <Link
+              href={`https://github.com/yourusername/metrodelhi/edit/main/constants/gates.ts`}
+              target="_blank"
+              onClick={(e) => e.stopPropagation()}
+              className="text-[10px] font-bold text-[#4f8ef7] hover:text-[#7ab0ff] uppercase tracking-wider transition-colors"
+            >
+              + Add Data
+            </Link>
+            <span className="text-[#4a5270] text-sm">{showGates ? '▲' : '▼'}</span>
+          </div>
+        </div>
 
         {showGates && (
           <div className="border-t border-[#1e2538]">
