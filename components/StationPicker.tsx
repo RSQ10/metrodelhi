@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import { FUNCTIONS_URL } from '@/lib/supabase'
+import { LINE_COLORS } from '@/constants/lines'
 
 interface Station {
   name: string
@@ -16,19 +17,19 @@ interface Props {
 }
 
 export default function StationPicker({ placeholder, value, onSelect }: Props) {
-  const [open, setOpen]         = useState(false)
-  const [query, setQuery]       = useState('')
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
   const [stations, setStations] = useState<Station[]>([])
-  const [loading, setLoading]   = useState(false)
+  const [loading, setLoading] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
   const fetchStations = async (q: string) => {
     setLoading(true)
     try {
-      const res  = await fetch(`${FUNCTIONS_URL}/stations?q=${encodeURIComponent(q)}`)
+      const res = await fetch(`${FUNCTIONS_URL}/stations?q=${encodeURIComponent(q)}`)
       const data = await res.json()
       setStations(data.stations ?? [])
-    } catch {}
+    } catch { }
     finally { setLoading(false) }
   }
 
@@ -109,15 +110,18 @@ export default function StationPicker({ placeholder, value, onSelect }: Props) {
                     {s.is_interchange ? '⇄ ' : ''}{s.name}
                   </span>
                   <div className="flex gap-1 ml-2 shrink-0">
-                    {(s.line_colors ?? []).map((color, ci) => (
-                      <span
-                        key={ci}
-                        className="px-1.5 py-0.5 rounded text-[9px] font-bold text-white"
-                        style={{ backgroundColor: color }}
-                      >
-                        {(s.lines?.[ci] ?? '').replace('branch', '').toUpperCase()}
-                      </span>
-                    ))}
+                    {(s.lines ?? []).map((line, ci) => {
+                      const color = LINE_COLORS[line.toLowerCase()] || s.line_colors?.[ci] || '#6b7280'
+                      return (
+                        <span
+                          key={ci}
+                          className="px-1.5 py-0.5 rounded text-[9px] font-bold text-white"
+                          style={{ backgroundColor: color }}
+                        >
+                          {line.replace('branch', '').toUpperCase()}
+                        </span>
+                      )
+                    })}
                   </div>
                 </button>
               ))
