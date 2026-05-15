@@ -42,25 +42,50 @@ export default function RouteResult({ route }: { route: RouteData }) {
     direction?: string
   }[] = []
 
+  // The API structure is:
+  // Step 0: board (station A, line X)
+  // Step 1: interchange (station B, line Y, direction Z) -> This means at station B, you switch TO line Y towards Z.
+  // Step 2: alight (station C, line Y, direction Z) -> This means you arrive at C on line Y.
+
   for (let i = 0; i < steps.length; i++) {
-    const step = steps[i]
-    if (step.action !== 'board' && step.action !== 'interchange') continue
+    const currentStep = steps[i]
     
+    // We only start a segment on 'board' or 'interchange'
+    if (currentStep.action !== 'board' && currentStep.action !== 'interchange') continue
+    
+    // Find the step that ends this leg (the next interchange or the final alight)
     const nextIdx = steps.findIndex((s, j) => j > i && (s.action === 'interchange' || s.action === 'alight'))
     if (nextIdx === -1) break
     
     const nextStep = steps[nextIdx]
-    const fromIdx = path.findIndex(p => p === step.station)
+    
+    // Logic for Line and Direction:
+    // 1. If we just boarded (Step 0), the line is in Step 0. The direction is in the NEXT step.
+    // 2. If we are at an interchange (Step 1), the line and direction for the NEXT leg are BOTH in Step 1.
+    
+    let legLine = currentStep.line
+    let legDirection = nextStep.direction
+
+    // If it's an interchange, the currentStep already contains the NEW line we are switching to.
+    // However, some APIs put the "towards" info in the step that completes the leg.
+    // Let's ensure we use the most specific data available.
+    if (currentStep.action === 'interchange') {
+      legLine = currentStep.line
+      // If currentStep has a direction, use it; otherwise use nextStep's direction
+      legDirection = currentStep.direction || nextStep.direction
+    } else if (currentStep.action === 'board') {
+      legLine = currentStep.line
+      legDirection = nextStep.direction
+    }
+
+    const fromIdx = path.findIndex(p => p === currentStep.station)
     const toIdx = path.findIndex(p => p === nextStep.station)
     const stops = fromIdx !== -1 && toIdx !== -1 ? path.slice(fromIdx + 1, toIdx) : []
     
-    // The line and direction for THIS leg are stored in the NEXT step (interchange/alight)
-    const legLine = nextStep.line
-    const legDirection = nextStep.direction
     const color = LINE_COLORS[legLine.toLowerCase()] || route.lines_used?.find(l => l.id === legLine)?.color || '#6b7280'
     
     segments.push({ 
-      boardStep: step, 
+      boardStep: currentStep, 
       stops, 
       endStep: nextStep, 
       color, 
