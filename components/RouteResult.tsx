@@ -1,6 +1,5 @@
 'use client'
 import { useState } from 'react'
-import Link from 'next/link'
 import { LINE_COLORS, LINE_NAMES } from '@/constants/lines'
 import { EXIT_GATES } from '@/constants/gates'
 
@@ -21,63 +20,64 @@ interface RouteData {
   steps: RouteStep[]
 }
 
+// Resolve the correct hex color for a line id, preferring server-supplied colors
+function resolveColor(lineId: string, linesUsed: RouteData['lines_used']): string {
+  return (
+    linesUsed?.find(l => l.id === lineId)?.color ??
+    LINE_COLORS[lineId] ??
+    '#6b7280'
+  )
+}
+
+// Case-insensitive station index lookup so mismatched casing never hides stops
+function findStation(path: string[], name: string): number {
+  const lower = name.toLowerCase()
+  return path.findIndex(p => p.toLowerCase() === lower)
+}
+
 export default function RouteResult({ route }: { route: RouteData }) {
   const [expandedSeg, setExpandedSeg] = useState<number | null>(null)
-  const [showGates, setShowGates] = useState(false)
+  const [showGates, setShowGates]     = useState(false)
 
   if (!route?.steps || !Array.isArray(route.steps)) return null
 
-  const path = route.path ?? []
-  const steps = route.steps
+  const path        = route.path ?? []
+  const steps       = route.steps
   const destination = steps[steps.length - 1]?.station ?? ''
-  const gateData = EXIT_GATES[destination]
+  const gateData    = EXIT_GATES[destination]
 
-  // Build segments
+  // ── Build segments ──────────────────────────────────────────────────────────
+  // Each segment = one continuous ride on a single line, from a board/interchange
+  // step to the next interchange/alight step.
+  // The COLOR must come from the step that BOARDS the segment (step.line),
+  // not from the *next* step — that's what was mixing colors at interchanges.
   const segments: {
-    boardStep: RouteStep
-    stops: string[]
-    endStep: RouteStep
-    color: string
-    line: string
-    direction?: string
+    boardStep: RouteStep   // the step where we get on this line
+    stops: string[]        // intermediate stations (not shown by default)
+    endStep: RouteStep     // where we get off / change
+    color: string          // line color for THIS segment
+    lineName: string       // human-readable line name for THIS segment
   }[] = []
 
-  // The backend buildSteps function provides:
-  // - 'board' step: has the initial line and direction.
-  // - 'interchange' step: has the NEW line and NEW direction you are switching to.
-  // - 'alight' step: marks the end of the journey.
-
   for (let i = 0; i < steps.length; i++) {
-    const currentStep = steps[i]
-    
-    // We only start a segment on 'board' or 'interchange'
-    if (currentStep.action !== 'board' && currentStep.action !== 'interchange') continue
-    
-    // Find the step that ends this leg (the next interchange or the final alight)
-    const nextIdx = steps.findIndex((s, j) => j > i && (s.action === 'interchange' || s.action === 'alight'))
-    if (nextIdx === -1) break
-    
-    const nextStep = steps[nextIdx]
-    
-    // Use the line and direction directly from the current step (board/interchange)
-    // as the backend already populates these correctly for the upcoming leg.
-    const legLine = currentStep.line
-    const legDirection = currentStep.direction
+    const step = steps[i]
+    if (step.action !== 'board' && step.action !== 'interchange') continue
 
-    const fromIdx = path.findIndex(p => p === currentStep.station)
-    const toIdx = path.findIndex(p => p === nextStep.station)
-    const stops = fromIdx !== -1 && toIdx !== -1 ? path.slice(fromIdx + 1, toIdx) : []
-    
-    const color = LINE_COLORS[legLine.toLowerCase()] || route.lines_used?.find(l => l.id === legLine)?.color || '#6b7280'
-    
-    segments.push({ 
-      boardStep: currentStep, 
-      stops, 
-      endStep: nextStep, 
-      color, 
-      line: legLine, 
-      direction: legDirection 
-    })
+    const nextIdx = steps.findIndex(
+      (s, j) => j > i && (s.action === 'interchange' || s.action === 'alight')
+    )
+    if (nextIdx === -1) break
+
+    const nextStep = steps[nextIdx]
+    const fromIdx  = findStation(path, step.station)
+    const toIdx    = findStation(path, nextStep.station)
+    const stops    = fromIdx !== -1 && toIdx !== -1 ? path.slice(fromIdx + 1, toIdx) : []
+
+    // Color & name come from THIS segment's line id (step.line), not nextStep
+    const color    = resolveColor(step.line, route.lines_used)
+    const lineName = LINE_NAMES[step.line] ?? step.line
+
+    segments.push({ boardStep: step, stops, endStep: nextStep, color, lineName })
   }
 
   return (
@@ -98,13 +98,13 @@ export default function RouteResult({ route }: { route: RouteData }) {
         ))}
       </div>
 
-      {/* ── Line pills ── */}
+      {/* ── Line pills (ordered by journey) ── */}
       <div className="flex gap-2 flex-wrap">
         {route.lines_used?.map(l => (
           <span
             key={l.id}
             className="px-3 py-1 rounded-full text-xs font-bold text-white"
-            style={{ backgroundColor: LINE_COLORS[l.id.toLowerCase()] || l.color }}
+            style={{ backgroundColor: l.color }}
           >
             {l.name}
           </span>
@@ -115,60 +115,99 @@ export default function RouteResult({ route }: { route: RouteData }) {
       <div className="bg-[#141928] rounded-2xl border border-[#1e2538] p-5">
         <h3 className="text-sm font-semibold text-[#4a5270] uppercase tracking-widest mb-5">Journey</h3>
 
-        {segments.map((seg, si) => (
-          <div key={si}>
-            {/* Board / interchange row */}
-            <div className="flex gap-4">
-              <div className="flex flex-col items-center w-5 shrink-0">
-                <div className="w-3 h-3 rounded-full mt-1 shrink-0" style={{ backgroundColor: seg.color }} />
-                <div className="w-0.5 flex-1 min-h-[20px] mt-1" style={{ backgroundColor: seg.color + '60' }} />
-              </div>
-              <div className="pb-4 flex-1 min-w-0">
-                <p className="font-semibold text-[#e2e8f8]">{seg.boardStep.station}</p>
-                <span
-                  className="inline-block mt-1.5 px-2 py-0.5 rounded-md text-[10px] font-bold text-white"
-                  style={{ backgroundColor: seg.color }}
-                >
-                  {LINE_NAMES[seg.line] ?? seg.line}
-                </span>
-                {seg.direction && (
-                  <p className="text-xs text-[#4a5270] mt-1">towards {seg.direction}</p>
-                )}
-                {seg.boardStep.action === 'interchange' && (
-                  <p className="text-xs text-[#4f8ef7] font-semibold mt-1">⇄ Change platform here</p>
-                )}
-              </div>
-            </div>
+        {segments.map((seg, si) => {
+          const isInterchange = seg.boardStep.action === 'interchange'
+          // The color that was active BEFORE this segment (for the interchange dot split)
+          const prevColor = si > 0 ? segments[si - 1].color : null
 
-            {/* Stops toggle */}
-            {seg.stops.length > 0 && (
-              <div>
-                <button
-                  onClick={() => setExpandedSeg(expandedSeg === si ? null : si)}
-                  className="flex items-center gap-2 ml-9 mb-1 text-xs text-[#4a5270]
-                    hover:text-[#e2e8f8] transition-colors py-1"
-                >
-                  <div className="w-0.5 h-4" style={{ backgroundColor: seg.color + '40' }} />
-                  <span>{expandedSeg === si ? '▲ hide' : `▼ ${seg.stops.length} stop${seg.stops.length > 1 ? 's' : ''}`}</span>
-                </button>
-
-                {expandedSeg === si && seg.stops.map((stop, idx) => (
-                  <div key={idx} className="flex gap-4">
-                    <div className="flex flex-col items-center w-5 shrink-0">
-                      <div className="w-2 h-2 rounded-full border mt-2 shrink-0 bg-[#141928]"
-                        style={{ borderColor: seg.color }} />
-                      <div className="w-0.5 flex-1 min-h-[16px] mt-0.5"
-                        style={{ backgroundColor: seg.color + '40' }} />
+          return (
+            <div key={si}>
+              {/* ── Board / Interchange row ── */}
+              <div className="flex gap-4">
+                <div className="flex flex-col items-center w-5 shrink-0">
+                  {/* 
+                    At an interchange the dot is split: top half = previous line color,
+                    bottom half = new line color, making the color transition obvious.
+                    At a board point it's a solid dot of the new line color.
+                  */}
+                  {isInterchange && prevColor ? (
+                    <div className="w-4 h-4 rounded-full mt-0.5 shrink-0 overflow-hidden flex flex-col border-2"
+                      style={{ borderColor: seg.color }}>
+                      <div className="flex-1" style={{ backgroundColor: prevColor }} />
+                      <div className="flex-1" style={{ backgroundColor: seg.color }} />
                     </div>
-                    <p className="text-sm text-[#4a5270] pb-3 flex-1">{stop}</p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        ))}
+                  ) : (
+                    <div className="w-3 h-3 rounded-full mt-1 shrink-0"
+                      style={{ backgroundColor: seg.color }} />
+                  )}
+                  <div className="w-0.5 flex-1 min-h-[20px] mt-1"
+                    style={{ backgroundColor: seg.color + '60' }} />
+                </div>
 
-        {/* Destination */}
+                <div className="pb-4 flex-1 min-w-0">
+                  <p className="font-semibold text-[#e2e8f8]">{seg.boardStep.station}</p>
+
+                  {/* Line badge — always this segment's color */}
+                  <span
+                    className="inline-block mt-1.5 px-2 py-0.5 rounded-md text-[10px] font-bold text-white"
+                    style={{ backgroundColor: seg.color }}
+                  >
+                    {seg.lineName}
+                  </span>
+
+                  {/* Direction — always shown when present */}
+                  {seg.boardStep.direction && (
+                    <p className="text-xs text-[#4a5270] mt-1">
+                      towards <span className="text-[#c9cdd8] font-medium">{seg.boardStep.direction}</span>
+                    </p>
+                  )}
+
+                  {/* Interchange notice with both line colors */}
+                  {isInterchange && prevColor && (
+                    <div className="flex items-center gap-1.5 mt-1.5">
+                      <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: prevColor }} />
+                      <span className="text-[10px] text-[#4a5270]">→</span>
+                      <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: seg.color }} />
+                      <span className="text-[10px] text-[#4f8ef7] font-semibold">Change platform</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* ── Intermediate stops toggle ── */}
+              {seg.stops.length > 0 && (
+                <div>
+                  <button
+                    onClick={() => setExpandedSeg(expandedSeg === si ? null : si)}
+                    className="flex items-center gap-2 ml-9 mb-1 text-xs text-[#4a5270]
+                      hover:text-[#e2e8f8] transition-colors py-1"
+                  >
+                    <div className="w-0.5 h-4" style={{ backgroundColor: seg.color + '40' }} />
+                    <span>
+                      {expandedSeg === si
+                        ? '▲ hide'
+                        : `▼ ${seg.stops.length} stop${seg.stops.length > 1 ? 's' : ''}`}
+                    </span>
+                  </button>
+
+                  {expandedSeg === si && seg.stops.map((stop, idx) => (
+                    <div key={idx} className="flex gap-4">
+                      <div className="flex flex-col items-center w-5 shrink-0">
+                        <div className="w-2 h-2 rounded-full border mt-2 shrink-0 bg-[#141928]"
+                          style={{ borderColor: seg.color }} />
+                        <div className="w-0.5 flex-1 min-h-[16px] mt-0.5"
+                          style={{ backgroundColor: seg.color + '40' }} />
+                      </div>
+                      <p className="text-sm text-[#4a5270] pb-3 flex-1">{stop}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )
+        })}
+
+        {/* ── Destination ── */}
         <div className="flex gap-4">
           <div className="flex flex-col items-center w-5 shrink-0">
             <div className="w-3 h-3 rounded-full mt-1 bg-emerald-500 shrink-0" />
@@ -182,23 +221,16 @@ export default function RouteResult({ route }: { route: RouteData }) {
 
       {/* ── Exit Gates ── */}
       <div className="bg-[#141928] rounded-2xl border border-[#1e2538] overflow-hidden">
-        <div className="flex items-center justify-between p-5 hover:bg-[#1a2030] transition-colors cursor-pointer" onClick={() => setShowGates(!showGates)}>
+        <button
+          onClick={() => setShowGates(!showGates)}
+          className="w-full flex items-center justify-between p-5 hover:bg-[#1a2030] transition-colors"
+        >
           <div>
             <h3 className="text-sm font-semibold text-[#4a5270] uppercase tracking-widest text-left">Exit Gates</h3>
             <p className="text-[#e2e8f8] font-medium mt-0.5 text-left">{destination}</p>
           </div>
-          <div className="flex items-center gap-4">
-            <Link
-              href={`https://github.com/yourusername/metrodelhi/edit/main/constants/gates.ts`}
-              target="_blank"
-              onClick={(e) => e.stopPropagation()}
-              className="text-[10px] font-bold text-[#4f8ef7] hover:text-[#7ab0ff] uppercase tracking-wider transition-colors"
-            >
-              + Add Data
-            </Link>
-            <span className="text-[#4a5270] text-sm">{showGates ? '▲' : '▼'}</span>
-          </div>
-        </div>
+          <span className="text-[#4a5270] text-sm">{showGates ? '▲' : '▼'}</span>
+        </button>
 
         {showGates && (
           <div className="border-t border-[#1e2538]">
