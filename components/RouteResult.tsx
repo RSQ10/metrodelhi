@@ -35,11 +35,8 @@ export default function RouteResult({ route }: { route: RouteData }) {
 
   // Helper function to get accurate color for a line
   const getLineColor = (lineId: string): string => {
-    // First check if lines_used has this line with a color
     const lineFromUsed = route.lines_used?.find(l => l.id === lineId)
     if (lineFromUsed?.color) return lineFromUsed.color
-    
-    // Fall back to LINE_COLORS constant
     return LINE_COLORS[lineId] || '#6b7280'
   }
 
@@ -50,7 +47,7 @@ export default function RouteResult({ route }: { route: RouteData }) {
     return LINE_NAMES[lineId] ?? lineId
   }
 
-  // Build segments with improved accuracy
+  // Build segments - only create a new segment when the line actually changes
   const segments: {
     boardStep: RouteStep
     stops: string[]
@@ -59,22 +56,52 @@ export default function RouteResult({ route }: { route: RouteData }) {
     lineName: string
   }[] = []
 
+  let currentSegmentStart = 0
+
   for (let i = 0; i < steps.length; i++) {
     const step = steps[i]
-    if (step.action !== 'board' && step.action !== 'interchange') continue
     
-    const nextIdx = steps.findIndex((s, j) => j > i && (s.action === 'interchange' || s.action === 'alight'))
+    // Only look for board actions to start a segment
+    if (step.action !== 'board') continue
+    
+    // Find the next step where the line changes (interchange or alight)
+    let nextIdx = -1
+    let lineChanged = false
+    
+    for (let j = i + 1; j < steps.length; j++) {
+      const nextStep = steps[j]
+      
+      // If we hit an alight, end the segment here
+      if (nextStep.action === 'alight') {
+        nextIdx = j
+        break
+      }
+      
+      // If we hit an interchange with a DIFFERENT line, end the segment
+      if (nextStep.action === 'interchange' && nextStep.line !== step.line) {
+        nextIdx = j
+        lineChanged = true
+        break
+      }
+    }
+    
     if (nextIdx === -1) break
     
-    const nextStep = steps[nextIdx]
-    const fromIdx  = path.findIndex(p => p === step.station)
-    const toIdx    = path.findIndex(p => p === nextStep.station)
-    const stops    = fromIdx !== -1 && toIdx !== -1 ? path.slice(fromIdx + 1, toIdx) : []
+    const boardStep = step
+    const endStep = steps[nextIdx]
+    const fromIdx = path.findIndex(p => p === boardStep.station)
+    const toIdx = path.findIndex(p => p === endStep.station)
+    const stops = fromIdx !== -1 && toIdx !== -1 ? path.slice(fromIdx + 1, toIdx) : []
     
-    const color = getLineColor(step.line)
-    const lineName = getLineName(step.line)
+    const color = getLineColor(boardStep.line)
+    const lineName = getLineName(boardStep.line)
     
-    segments.push({ boardStep: step, stops, endStep: nextStep, color, lineName })
+    segments.push({ boardStep, stops, endStep, color, lineName })
+    
+    // Skip to the next board action if line changed
+    if (lineChanged) {
+      i = nextIdx - 1
+    }
   }
 
   return (
@@ -132,19 +159,19 @@ export default function RouteResult({ route }: { route: RouteData }) {
                   {seg.lineName}
                 </span>
 
-                {/* Direction - Always show if available */}
+                {/* Direction - Show if available */}
                 {seg.boardStep.direction && (
                   <p className="text-xs text-[#7c8394] mt-2 font-medium">→ towards {seg.boardStep.direction}</p>
                 )}
 
-                {/* Interchange Indicator */}
-                {seg.boardStep.action === 'interchange' && (
+                {/* Interchange Indicator - Only show if this is an actual interchange (line change) */}
+                {seg.boardStep.action === 'interchange' && si > 0 && (
                   <p className="text-xs text-[#4f8ef7] font-bold mt-2 flex items-center gap-1">
                     ⇄ Change platform here
                   </p>
                 )}
 
-                {/* Show next line info for interchange stations */}
+                {/* Show next line info only for actual interchanges */}
                 {seg.boardStep.action === 'interchange' && si + 1 < segments.length && (
                   <div className="mt-3 pt-3 border-t border-[#1e2538]/30">
                     <p className="text-xs text-[#4a5270] font-medium mb-1.5">Next line:</p>
